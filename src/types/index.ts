@@ -22,6 +22,7 @@ export type MessageType =
   | 'HANDSHAKE_ACK'
   | 'SYNC_STATE'
   | 'SYNC_CURSOR'
+  | 'FORMAT_SYNC'
   | 'PING'
   | 'PONG';
 
@@ -34,6 +35,9 @@ export interface SyncMessage<T = any> {
   type: MessageType;
   version: number;
   payload: T;
+  // Assessment compatibility fields
+  action?: 'bold' | 'italic' | 'strikeThrough';
+  html?: string;
 }
 
 export interface ActionLogEntry {

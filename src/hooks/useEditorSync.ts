@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useIframeComm } from './useIframeComm';
 import { useRichText } from './useRichText';
-import type { SyncMessage, SyncStatePayload, ActionLogEntry } from '../types';
+import type { SyncMessage, SyncStatePayload, ActionLogEntry, CursorSelection, MessageType } from '../types';
 import { createMessage, normalizeHtml } from '../services/syncProtocol';
 import { sanitizeHtml } from '../services/security';
 import { getCursorSelection, restoreCursorSelection } from '../services/cursor';
@@ -31,7 +31,7 @@ export function useEditorSync({ selfId, onLogEntry }: UseEditorSyncProps) {
    * Encapsulates state serializing and transmits it to parent host.
    */
   const broadcastState = useCallback(
-    (typingState: boolean) => {
+    (typingState: boolean, action?: 'bold' | 'italic' | 'strikeThrough') => {
       const el = editorRef.current;
       if (!el) return;
 
@@ -49,13 +49,21 @@ export function useEditorSync({ selfId, onLogEntry }: UseEditorSyncProps) {
         isTyping: typingState,
       };
 
+      const type: MessageType = action ? 'FORMAT_SYNC' : 'SYNC_STATE';
+
       const message = createMessage(
         selfId,
         '*', // Broadcast target (Broker will resolve and forward to matching peers)
-        'SYNC_STATE',
+        type,
         payload,
         versionRef.current
       );
+
+      // Set assessment compatibility root properties
+      if (action) {
+        message.action = action;
+        message.html = html;
+      }
 
       sendToParentRef.current(message);
     },
@@ -67,7 +75,7 @@ export function useEditorSync({ selfId, onLogEntry }: UseEditorSyncProps) {
    * Unused parameters are prefixed with underscores to satisfy ESLint rules.
    */
   const handleContentChange = useCallback(
-    () => {
+    (_html: string, _selection: CursorSelection | null, action?: 'bold' | 'italic' | 'strikeThrough') => {
       if (isApplyingIncomingSync.current) return;
 
       // Increment local state revision version
@@ -81,7 +89,7 @@ export function useEditorSync({ selfId, onLogEntry }: UseEditorSyncProps) {
       }
       typingTimeoutRef.current = window.setTimeout(() => {
         setIsTyping(false);
-        broadcastState(false);
+        broadcastState(false, action);
       }, TYPING_TIMEOUT_MS);
 
       // Debounce the content relay to prevent network flooding
@@ -89,7 +97,7 @@ export function useEditorSync({ selfId, onLogEntry }: UseEditorSyncProps) {
         clearTimeout(debounceTimeoutRef.current);
       }
       debounceTimeoutRef.current = window.setTimeout(() => {
-        broadcastState(true);
+        broadcastState(true, action);
         setSyncStatus('synced');
       }, DEBOUNCE_DELAY_MS);
     },
@@ -111,7 +119,7 @@ export function useEditorSync({ selfId, onLogEntry }: UseEditorSyncProps) {
    */
   const handleMessageReceived = useCallback(
     (message: SyncMessage) => {
-      if (message.type === 'SYNC_STATE') {
+      if (message.type === 'SYNC_STATE' || message.type === 'FORMAT_SYNC') {
         const payload = message.payload as SyncStatePayload;
 
         // 1. logical clock check to ignore stale/out-of-order items

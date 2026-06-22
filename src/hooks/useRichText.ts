@@ -4,7 +4,11 @@ import { getCursorSelection } from '../services/cursor';
 
 export function useRichText(
   editorRef: React.RefObject<HTMLDivElement | null>,
-  onContentChange: (html: string, selection: CursorSelection | null) => void
+  onContentChange: (
+    html: string,
+    selection: CursorSelection | null,
+    action?: 'bold' | 'italic' | 'strikeThrough'
+  ) => void
 ) {
 
   const [activeFormats, setActiveFormats] = useState<FormattingState>({
@@ -48,7 +52,7 @@ export function useRichText(
 
         const html = editorRef.current.innerHTML;
         const selection = getCursorSelection(editorRef.current);
-        onContentChangeRef.current(html, selection);
+        onContentChangeRef.current(html, selection, command);
       } catch (error) {
         console.warn(`[RichTextService] Exec command failed for ${command}:`, error);
       }
